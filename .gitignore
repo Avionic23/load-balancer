@@ -1,0 +1,10 @@
+# binaries
+load-balancer
+*.exe
+
+# IDE
+.idea/
+
+# Go
+*.test
+*.out
