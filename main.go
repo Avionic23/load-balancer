@@ -2,18 +2,22 @@ package main
 
 import (
 	"fmt"
-	backend2 "load-balancer/backend"
-	listener2 "load-balancer/listener"
-	proxy2 "load-balancer/proxy"
-	router2 "load-balancer/router"
+	"load-balancer/backend"
+	"load-balancer/listener"
+	"load-balancer/proxy"
+	"load-balancer/router"
+	"load-balancer/router/roundrobin"
 )
 
 func main() {
 	port := 8080
 	host := "[::1]"
-	backend := backend2.NewBackend("localhost:80")
-	router := router2.NewRouter(host+fmt.Sprintf(":%d", port), backend)
-	proxy := proxy2.NewProxy(router)
-	listener := listener2.NewListener(proxy)
-	listener.Listen(int64(port))
+	b := backend.NewBackend("localhost:80")
+	b1 := backend.NewBackend("localhost:8081")
+	bp := backend.NewBackendPool([]*backend.Backend{b, b1})
+	algo := roundrobin.NewRoundRobin(bp)
+	r := router.NewRouter(host+fmt.Sprintf(":%d", port), algo)
+	p := proxy.NewProxy(r)
+	l := listener.NewListener(p)
+	l.Listen(int64(port))
 }
