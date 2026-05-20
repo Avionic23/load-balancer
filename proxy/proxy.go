@@ -3,12 +3,16 @@ package proxy
 import (
 	"fmt"
 	"io"
-	"load-balancer/router"
+	"load-balancer/backend"
 	"net"
 )
 
+type BackendIO interface {
+	GetUrl() string
+}
+
 type RouterIO interface {
-	Route(string) router.BackendIO
+	Route(string) *backend.Backend
 }
 
 type Proxy struct {
@@ -21,11 +25,12 @@ func NewProxy(rt RouterIO) *Proxy {
 
 func (p *Proxy) Handle(conn net.Conn) error {
 	localAddr := conn.LocalAddr().String()
-	backend := p.router.Route(localAddr)
-	if backend == nil {
+	b := p.router.Route(localAddr)
+	if b == nil {
 		return fmt.Errorf("no available backend")
 	}
-	backendConn, err := net.Dial("tcp", backend.GetUrl())
+	fmt.Println(b.GetUrl())
+	backendConn, err := net.Dial("tcp", b.GetUrl())
 	if err != nil {
 		return err
 	}
