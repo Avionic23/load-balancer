@@ -7,10 +7,6 @@ import (
 	"net"
 )
 
-type BackendIO interface {
-	GetUrl() string
-}
-
 type RouterIO interface {
 	Route(string) *backend.Backend
 }
