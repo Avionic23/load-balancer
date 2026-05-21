@@ -29,7 +29,6 @@ func (l *Listener) Listen(port int64) {
 			continue
 		}
 		go func() {
-			defer conn.Close()
 			err = l.proxy.Handle(conn)
 			if err != nil {
 				fmt.Println(err)

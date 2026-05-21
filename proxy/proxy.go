@@ -5,6 +5,7 @@ import (
 	"io"
 	"load-balancer/backend"
 	"net"
+	"time"
 )
 
 type RouterIO interface {
@@ -12,26 +13,52 @@ type RouterIO interface {
 }
 
 type Proxy struct {
-	router RouterIO
+	router      RouterIO
+	dialTimeout time.Duration
+	connTimeout time.Duration
 }
 
 func NewProxy(rt RouterIO) *Proxy {
-	return &Proxy{router: rt}
+	return &Proxy{
+		router:      rt,
+		dialTimeout: 10 * time.Second,
+		connTimeout: 20 * time.Second,
+	}
 }
 
 func (p *Proxy) Handle(conn net.Conn) error {
+	defer conn.Close()
 	localAddr := conn.LocalAddr().String()
 	b := p.router.Route(localAddr)
 	if b == nil {
 		return fmt.Errorf("no available backend")
 	}
-	fmt.Println(b.GetUrl())
-	backendConn, err := net.Dial("tcp", b.GetUrl())
+	backendConn, err := net.DialTimeout("tcp", b.GetUrl(), p.dialTimeout)
 	if err != nil {
 		return err
 	}
 	defer backendConn.Close()
-	go io.Copy(backendConn, conn)
-	io.Copy(conn, backendConn)
+	err = conn.SetDeadline(time.Now().Add(p.connTimeout))
+	if err != nil {
+		return err
+	}
+	err = backendConn.SetDeadline(time.Now().Add(p.connTimeout))
+	if err != nil {
+		return err
+	}
+	ch := make(chan error, 2)
+	go func() {
+		_, localErr := io.Copy(backendConn, conn)
+		ch <- localErr
+	}()
+	go func() {
+		_, localErr := io.Copy(conn, backendConn)
+		ch <- localErr
+	}()
+	for range 2 {
+		if err = <-ch; err != nil {
+			return err
+		}
+	}
 	return nil
 }
