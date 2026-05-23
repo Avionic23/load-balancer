@@ -27,7 +27,6 @@ func NewProxy(rt RouterIO) *Proxy {
 }
 
 func (p *Proxy) Handle(conn net.Conn) error {
-	defer conn.Close()
 	localAddr := conn.LocalAddr().String()
 	b := p.router.Route(localAddr)
 	if b == nil {
