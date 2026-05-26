@@ -3,9 +3,10 @@ package listener
 import (
 	"context"
 	"errors"
-	"fmt"
+	"log"
 	"net"
 	"sync"
+	"time"
 )
 
 type ProxyIO interface {
@@ -21,6 +22,9 @@ type Listener struct {
 }
 
 func NewListener(px ProxyIO) *Listener {
+	if px == nil {
+		panic("proxy cannot be nil")
+	}
 	return &Listener{
 		proxy:       px,
 		activeConns: make(map[net.Conn]struct{}),
@@ -36,6 +40,8 @@ func (l *Listener) Listen(ln net.Listener) {
 			if errors.Is(err, net.ErrClosed) {
 				return
 			}
+			log.Printf("accept error: %v", err)
+			time.Sleep(1 * time.Second)
 			continue
 		}
 		l.mu.Lock()
@@ -44,6 +50,12 @@ func (l *Listener) Listen(ln net.Listener) {
 		l.wg.Add(1)
 		go func() {
 			defer l.wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("panic handling connection %s: %v",
+						conn.RemoteAddr(), r)
+				}
+			}()
 			defer conn.Close()
 			defer func() {
 				l.mu.Lock()
@@ -52,7 +64,7 @@ func (l *Listener) Listen(ln net.Listener) {
 			}()
 			err := l.proxy.Handle(conn)
 			if err != nil {
-				fmt.Println(err)
+				log.Printf("connection %s: %v", conn.RemoteAddr(), err)
 			}
 		}()
 	}

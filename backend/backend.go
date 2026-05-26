@@ -1,10 +1,13 @@
 package backend
 
-import "sync"
+import (
+	"sync"
+	"sync/atomic"
+)
 
 type Backend struct {
 	url     string
-	healthy bool
+	healthy atomic.Bool
 }
 
 func NewBackend(url string) *Backend {
@@ -16,7 +19,7 @@ func (b *Backend) GetUrl() string {
 }
 
 func (b *Backend) IsHealthy() bool {
-	return b.healthy
+	return b.healthy.Load()
 }
 
 type BackendPool struct {
@@ -25,6 +28,9 @@ type BackendPool struct {
 }
 
 func NewBackendPool(bs []*Backend) *BackendPool {
+	if len(bs) < 1 {
+		panic("backend pool is empty")
+	}
 	return &BackendPool{bs: bs}
 }
 
