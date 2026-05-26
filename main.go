@@ -8,6 +8,7 @@ import (
 	"load-balancer/proxy"
 	"load-balancer/router"
 	"load-balancer/router/roundrobin"
+	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -20,7 +21,7 @@ func main() {
 	host := "[::1]"
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
-		panic(err)
+		log.Fatalf("failed to listen on port %d: %v", port, err)
 	}
 	b := backend.NewBackend("localhost:80")
 	b1 := backend.NewBackend("localhost:8081")
