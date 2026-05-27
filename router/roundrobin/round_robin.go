@@ -18,11 +18,11 @@ type RoundRobin struct {
 	mu    sync.Mutex
 }
 
-func NewRoundRobin(bs BackendPoolIO) *RoundRobin {
-	if bs == nil {
+func NewRoundRobin(bp BackendPoolIO) *RoundRobin {
+	if bp == nil {
 		panic("backend pool cannot be nil")
 	}
-	return &RoundRobin{bp: bs}
+	return &RoundRobin{bp: bp}
 }
 
 func (rr *RoundRobin) GetBackend() (*backend.Backend, error) {

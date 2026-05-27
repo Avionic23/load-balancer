@@ -10,8 +10,12 @@ type Backend struct {
 	healthy atomic.Bool
 }
 
-func NewBackend(url string) *Backend {
-	return &Backend{url: url}
+type BackendOptions struct {
+	Url string
+}
+
+func NewBackend(opts BackendOptions) *Backend {
+	return &Backend{url: opts.Url}
 }
 
 func (b *Backend) GetUrl() string {
@@ -20,6 +24,10 @@ func (b *Backend) GetUrl() string {
 
 func (b *Backend) IsHealthy() bool {
 	return b.healthy.Load()
+}
+
+func (b *Backend) SetHealth(isHealthy bool) {
+	b.healthy.Store(isHealthy)
 }
 
 type BackendPool struct {
