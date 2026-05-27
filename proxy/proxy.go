@@ -18,14 +18,19 @@ type Proxy struct {
 	connTimeout time.Duration
 }
 
-func NewProxy(rt RouterIO) *Proxy {
+type ProxyOptions struct {
+	DialTimeout time.Duration
+	ConnTimeout time.Duration
+}
+
+func NewProxy(rt RouterIO, opts ProxyOptions) *Proxy {
 	if rt == nil {
 		panic("router cannot be nil")
 	}
 	return &Proxy{
 		router:      rt,
-		dialTimeout: 10 * time.Second,
-		connTimeout: 20 * time.Second,
+		dialTimeout: opts.DialTimeout,
+		connTimeout: opts.ConnTimeout,
 	}
 }
 

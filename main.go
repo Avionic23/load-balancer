@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"load-balancer/backend"
+	"load-balancer/config"
 	"load-balancer/listener"
 	"load-balancer/proxy"
 	"load-balancer/router"
@@ -13,22 +14,38 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 )
 
 func main() {
-	port := 8080
+	conf := config.Load("config/config_test.yaml")
+
 	host := "[::1]"
-	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", conf.Port))
 	if err != nil {
-		log.Fatalf("failed to listen on port %d: %v", port, err)
+		log.Fatalf("failed to listen on port %d: %v", conf.Port, err)
 	}
-	b := backend.NewBackend("localhost:80")
-	b1 := backend.NewBackend("localhost:8081")
-	bp := backend.NewBackendPool([]*backend.Backend{b, b1})
-	algo := roundrobin.NewRoundRobin(bp)
-	r := router.NewRouter(host+fmt.Sprintf(":%d", port), algo)
-	p := proxy.NewProxy(r)
+
+	backends := make([]*backend.Backend, 0, len(conf.Backends))
+	for i, b := range conf.Backends {
+		backends = append(backends, backend.NewBackend(backend.BackendOptions{
+			Url: b.Url}))
+		backends[i].SetHealth(true)
+	}
+	bp := backend.NewBackendPool(backends)
+
+	var algo router.AlgoIO
+	switch conf.Algorithm {
+	case "round-robin":
+		algo = roundrobin.NewRoundRobin(bp)
+	default:
+		panic("unknown algorithm")
+	}
+
+	r := router.NewRouter(host+fmt.Sprintf(":%d", conf.Port), algo)
+	p := proxy.NewProxy(r, proxy.ProxyOptions{
+		DialTimeout: conf.Timeouts.Dial,
+		ConnTimeout: conf.Timeouts.Connect,
+	})
 	l := listener.NewListener(p)
 
 	go l.Listen(ln)
@@ -37,7 +54,7 @@ func main() {
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
 	<-sigCh
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), conf.Timeouts.Shutdown)
 	defer cancel()
 
 	l.GracefulShutdown(ctx)

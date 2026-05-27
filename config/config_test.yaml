@@ -1,0 +1,9 @@
+port: 8080
+backends:
+  - {url: "localhost:80", weight: 10}
+  - {url: "localhost:8081", weight: 10}
+algorithm: "round-robin"
+timeouts:
+  dial: 10s
+  connect: 20s
+  shutdown: 30s
