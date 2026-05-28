@@ -9,6 +9,7 @@ import (
 	"load-balancer/proxy"
 	"load-balancer/router"
 	"load-balancer/router/roundrobin"
+	"load-balancer/router/weightedroundrobin"
 	"log"
 	"net"
 	"os"
@@ -28,7 +29,9 @@ func main() {
 	backends := make([]*backend.Backend, 0, len(conf.Backends))
 	for i, b := range conf.Backends {
 		backends = append(backends, backend.NewBackend(backend.BackendOptions{
-			Url: b.Url}))
+			Url:    b.Url,
+			Weight: b.Weight,
+		}))
 		backends[i].SetHealth(true)
 	}
 	bp := backend.NewBackendPool(backends)
@@ -37,6 +40,8 @@ func main() {
 	switch conf.Algorithm {
 	case "round-robin":
 		algo = roundrobin.NewRoundRobin(bp)
+	case "weighted-round-robin":
+		algo = weightedroundrobin.NewWeightedRoundRobin(bp)
 	default:
 		panic("unknown algorithm")
 	}

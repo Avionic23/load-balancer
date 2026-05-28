@@ -8,18 +8,27 @@ import (
 type Backend struct {
 	url     string
 	healthy atomic.Bool
+	weight  int
 }
 
 type BackendOptions struct {
-	Url string
+	Url    string
+	Weight int
 }
 
 func NewBackend(opts BackendOptions) *Backend {
-	return &Backend{url: opts.Url}
+	return &Backend{
+		url:    opts.Url,
+		weight: opts.Weight,
+	}
 }
 
 func (b *Backend) GetUrl() string {
 	return b.url
+}
+
+func (b *Backend) GetWeight() int {
+	return b.weight
 }
 
 func (b *Backend) IsHealthy() bool {
