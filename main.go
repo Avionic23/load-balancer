@@ -27,10 +27,9 @@ func main() {
 	}
 
 	backends := make([]*backend.Backend, 0, len(conf.Backends))
-	for i, b := range conf.Backends {
+	for _, b := range conf.Backends {
 		backends = append(backends, backend.NewBackend(backend.BackendOptions{
 			Url: b.Url}))
-		backends[i].SetHealth(true)
 	}
 	bp := backend.NewBackendPool(backends)
 
