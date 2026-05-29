@@ -13,9 +13,10 @@ type BackendCfg struct {
 }
 
 type TimeoutsCfg struct {
-	Dial     time.Duration `yaml:"dial"`
-	Connect  time.Duration `yaml:"connect"`
-	Shutdown time.Duration `yaml:"shutdown"`
+	Dial        time.Duration `yaml:"dial"`
+	Connect     time.Duration `yaml:"connect"`
+	Shutdown    time.Duration `yaml:"shutdown"`
+	HealthCheck time.Duration `yaml:"health_check"`
 }
 
 type Config struct {

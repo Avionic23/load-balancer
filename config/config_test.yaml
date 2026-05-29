@@ -7,3 +7,4 @@ timeouts:
   dial: 10s
   connect: 20s
   shutdown: 30s
+  health_check: 5s
