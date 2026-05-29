@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"load-balancer/backend"
 	"load-balancer/config"
+	"load-balancer/healthcheck"
 	"load-balancer/listener"
 	"load-balancer/proxy"
 	"load-balancer/router"
@@ -48,14 +49,18 @@ func main() {
 	})
 	l := listener.NewListener(p)
 
+	hc := healthcheck.NewHealthChecker(bp)
+	hc.RunOnce()
+
+	ctx, cancel := context.WithTimeout(context.Background(), conf.Timeouts.Shutdown)
+	defer cancel()
+
+	go hc.Run(ctx, conf.Timeouts.HealthCheck)
 	go l.Listen(ln)
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
 	<-sigCh
-
-	ctx, cancel := context.WithTimeout(context.Background(), conf.Timeouts.Shutdown)
-	defer cancel()
 
 	l.GracefulShutdown(ctx)
 }
