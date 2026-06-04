@@ -9,12 +9,25 @@ import (
 	"time"
 )
 
+var errNoBackend = errors.New("no backend available")
+
 type stubRouter struct {
-	b *backend.Backend
+	b   *backend.Backend
+	err error
 }
 
-func (s *stubRouter) Route(_ string) *backend.Backend {
-	return s.b
+func (s *stubRouter) Route(_ string) (*backend.Backend, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.b, nil
+}
+
+func defaultOpts() ProxyOptions {
+	return ProxyOptions{
+		DialTimeout: 10 * time.Second,
+		ConnTimeout: 30 * time.Second,
+	}
 }
 
 func startEchoServer(t *testing.T) string {
@@ -37,7 +50,8 @@ func startEchoServer(t *testing.T) string {
 
 func TestHandleForwardsData(t *testing.T) {
 	addr := startEchoServer(t)
-	p := NewProxy(&stubRouter{b: backend.NewBackend(addr)})
+	b := backend.NewBackend(backend.BackendOptions{Url: addr})
+	p := NewProxy(&stubRouter{b: b}, defaultOpts())
 
 	clientConn, proxyConn := net.Pipe()
 	defer clientConn.Close()
@@ -56,18 +70,17 @@ func TestHandleForwardsData(t *testing.T) {
 	}
 }
 
-func TestHandleNoBackend(t *testing.T) {
-	p := NewProxy(&stubRouter{b: nil})
+func TestHandleRoutingError(t *testing.T) {
+	p := NewProxy(&stubRouter{err: errNoBackend}, defaultOpts())
 	_, proxyConn := net.Pipe()
 
 	err := p.Handle(proxyConn)
-	if err == nil {
-		t.Error("expected error when no backend available")
+	if !errors.Is(err, errNoBackend) {
+		t.Errorf("expected errNoBackend, got %v", err)
 	}
 }
 
 func TestHandleDeadlineExceeded(t *testing.T) {
-	// backend accepts but never sends anything — deadline fires first
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -79,36 +92,35 @@ func TestHandleDeadlineExceeded(t *testing.T) {
 			return
 		}
 		defer conn.Close()
-		// block forever — never read or write
 		select {}
 	}()
 
-	p := &Proxy{
-		router:      &stubRouter{b: backend.NewBackend(ln.Addr().String())},
-		dialTimeout: 10 * time.Second,
-		connTimeout: 5 * time.Millisecond,
-	}
+	b := backend.NewBackend(backend.BackendOptions{Url: ln.Addr().String()})
+	p := NewProxy(&stubRouter{b: b}, ProxyOptions{
+		DialTimeout: 10 * time.Second,
+		ConnTimeout: 5 * time.Millisecond,
+	})
 
 	clientConn, proxyConn := net.Pipe()
 	defer clientConn.Close()
 
 	err = p.Handle(proxyConn)
+	proxyConn.Close()
 
 	var netErr net.Error
 	if !errors.As(err, &netErr) || !netErr.Timeout() {
 		t.Errorf("expected timeout error, got %v", err)
 	}
 
-	// proxyConn was closed by defer conn.Close() inside Handle
-	// so writing to clientConn should now fail
 	_, writeErr := clientConn.Write([]byte("x"))
 	if writeErr == nil {
-		t.Error("expected clientConn write to fail after Handle returned")
+		t.Error("expected clientConn write to fail after proxyConn closed")
 	}
 }
 
 func TestHandleBackendUnreachable(t *testing.T) {
-	p := NewProxy(&stubRouter{b: backend.NewBackend("127.0.0.1:1")})
+	b := backend.NewBackend(backend.BackendOptions{Url: "127.0.0.1:1"})
+	p := NewProxy(&stubRouter{b: b}, defaultOpts())
 	_, proxyConn := net.Pipe()
 
 	err := p.Handle(proxyConn)
