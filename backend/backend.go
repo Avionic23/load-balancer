@@ -6,9 +6,10 @@ import (
 )
 
 type Backend struct {
-	url     string
-	healthy atomic.Bool
-	weight  int
+	url         string
+	healthy     atomic.Bool
+	weight      int
+	activeConns atomic.Int64
 }
 
 type BackendOptions struct {
@@ -37,6 +38,18 @@ func (b *Backend) IsHealthy() bool {
 
 func (b *Backend) SetHealth(isHealthy bool) {
 	b.healthy.Store(isHealthy)
+}
+
+func (b *Backend) IncrActiveConns() {
+	b.activeConns.Add(1)
+}
+
+func (b *Backend) DecrActiveConns() {
+	b.activeConns.Add(-1)
+}
+
+func (b *Backend) GetActiveConns() int64 {
+	return b.activeConns.Load()
 }
 
 type BackendPool struct {
