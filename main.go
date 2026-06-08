@@ -9,6 +9,7 @@ import (
 	"load-balancer/listener"
 	"load-balancer/proxy"
 	"load-balancer/router"
+	"load-balancer/router/leastconnections"
 	"load-balancer/router/roundrobin"
 	"load-balancer/router/weightedroundrobin"
 	"log"
@@ -42,6 +43,8 @@ func main() {
 		algo = roundrobin.NewRoundRobin(bp)
 	case "weighted-round-robin":
 		algo = weightedroundrobin.NewWeightedRoundRobin(bp)
+	case "least_connections":
+		algo = leastconnections.NewLeastConnections(bp)
 	default:
 		panic("unknown algorithm")
 	}

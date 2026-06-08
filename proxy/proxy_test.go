@@ -128,3 +128,65 @@ func TestHandleBackendUnreachable(t *testing.T) {
 		t.Error("expected error when backend is unreachable")
 	}
 }
+
+func TestActiveConnsIncrementedDuringConnection(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+
+	connEstablished := make(chan struct{})
+	unblock := make(chan struct{})
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		close(connEstablished)
+		<-unblock
+	}()
+
+	b := backend.NewBackend(backend.BackendOptions{Url: ln.Addr().String()})
+	p := NewProxy(&stubRouter{b: b}, defaultOpts())
+
+	clientConn, proxyConn := net.Pipe()
+	defer clientConn.Close()
+
+	done := make(chan struct{})
+	go func() {
+		p.Handle(proxyConn)
+		close(done)
+	}()
+
+	<-connEstablished
+	deadline := time.After(time.Second)
+	for b.GetActiveConns() != 1 {
+		select {
+		case <-deadline:
+			t.Fatalf("timed out waiting for active conn increment, got %d", b.GetActiveConns())
+		default:
+		}
+	}
+
+	close(unblock)
+	clientConn.Close()
+	<-done
+
+	if b.GetActiveConns() != 0 {
+		t.Errorf("expected 0 active conns after Handle returned, got %d", b.GetActiveConns())
+	}
+}
+
+func TestActiveConnsNotIncrementedOnFailedDial(t *testing.T) {
+	b := backend.NewBackend(backend.BackendOptions{Url: "127.0.0.1:1"})
+	p := NewProxy(&stubRouter{b: b}, defaultOpts())
+	_, proxyConn := net.Pipe()
+
+	p.Handle(proxyConn)
+
+	if b.GetActiveConns() != 0 {
+		t.Errorf("expected 0 active conns after failed dial, got %d", b.GetActiveConns())
+	}
+}

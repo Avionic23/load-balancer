@@ -40,11 +40,16 @@ func (p *Proxy) Handle(conn net.Conn) error {
 	if err != nil {
 		return fmt.Errorf("routing: %w", err)
 	}
+
 	backendConn, err := net.DialTimeout("tcp", b.GetUrl(), p.dialTimeout)
 	if err != nil {
 		return fmt.Errorf("dial %s: %w", b.GetUrl(), err)
 	}
+
+	b.IncrActiveConns()
+	defer b.DecrActiveConns()
 	defer backendConn.Close()
+
 	err = conn.SetDeadline(time.Now().Add(p.connTimeout))
 	if err != nil {
 		return fmt.Errorf("set deadline %s: %w", conn.RemoteAddr(), err)
@@ -53,6 +58,7 @@ func (p *Proxy) Handle(conn net.Conn) error {
 	if err != nil {
 		return fmt.Errorf("set deadline %s: %w", backendConn.RemoteAddr(), err)
 	}
+
 	ch := make(chan error, 2)
 	go func() {
 		_, localErr := io.Copy(backendConn, conn)
@@ -68,10 +74,12 @@ func (p *Proxy) Handle(conn net.Conn) error {
 		}
 		ch <- localErr
 	}()
+
 	for range 2 {
 		if err = <-ch; err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
