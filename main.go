@@ -59,15 +59,17 @@ func main() {
 	hc := healthcheck.NewHealthChecker(bp)
 	hc.RunOnce()
 
-	ctx, cancel := context.WithTimeout(context.Background(), conf.Timeouts.Shutdown)
-	defer cancel()
+	hcCtx, hcCancel := context.WithCancel(context.Background())
 
-	go hc.Run(ctx, conf.Timeouts.HealthCheck)
+	go hc.Run(hcCtx, conf.Timeouts.HealthCheck)
 	go l.Listen(ln)
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
 	<-sigCh
+	hcCancel()
 
-	l.GracefulShutdown(ctx)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), conf.Timeouts.Shutdown)
+	defer shutdownCancel()
+	l.GracefulShutdown(shutdownCtx)
 }
