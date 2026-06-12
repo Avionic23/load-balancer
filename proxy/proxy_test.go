@@ -190,3 +190,26 @@ func TestActiveConnsNotIncrementedOnFailedDial(t *testing.T) {
 		t.Errorf("expected 0 active conns after failed dial, got %d", b.GetActiveConns())
 	}
 }
+
+func TestCircuitOpensAfterRepeatedDialFailures(t *testing.T) {
+	b := backend.NewBackend(backend.BackendOptions{
+		Url:                      "127.0.0.1:1",
+		CircuitWindowSize:        4,
+		CircuitFailureThreshold:  50,
+		CircuitCooldownTimeout:   time.Minute,
+	})
+	p := NewProxy(&stubRouter{b: b}, ProxyOptions{
+		DialTimeout: 100 * time.Millisecond,
+		ConnTimeout: 30 * time.Second,
+	})
+
+	for range 2 {
+		_, proxyConn := net.Pipe()
+		p.Handle(proxyConn)
+		proxyConn.Close()
+	}
+
+	if !b.IsOpen() {
+		t.Error("expected circuit to be open after repeated dial failures")
+	}
+}
