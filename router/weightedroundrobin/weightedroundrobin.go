@@ -44,7 +44,7 @@ func (wrr *WeightedRoundRobin) GetBackend() (*backend.Backend, error) {
 	defer wrr.mu.Unlock()
 	for range len(wrr.bs) {
 		b := wrr.bs[wrr.index]
-		if b.IsHealthy() {
+		if b.IsHealthy() && !b.IsOpen() {
 			wrr.weight--
 			if wrr.weight <= 0 {
 				wrr.index = (wrr.index + 1) % len(wrr.bs)

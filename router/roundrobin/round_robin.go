@@ -32,7 +32,7 @@ func (rr *RoundRobin) GetBackend() (*backend.Backend, error) {
 	for range len(bp) {
 		b := bp[rr.index]
 		rr.index = (rr.index + 1) % len(bp)
-		if b.IsHealthy() {
+		if b.IsHealthy() && !b.IsOpen() {
 			return b, nil
 		}
 	}
