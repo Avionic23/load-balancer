@@ -43,6 +43,7 @@ func (p *Proxy) Handle(conn net.Conn) error {
 
 	backendConn, err := net.DialTimeout("tcp", b.GetUrl(), p.dialTimeout)
 	if err != nil {
+		b.RecordFailure()
 		return fmt.Errorf("dial %s: %w", b.GetUrl(), err)
 	}
 
@@ -56,6 +57,7 @@ func (p *Proxy) Handle(conn net.Conn) error {
 	}
 	err = backendConn.SetDeadline(time.Now().Add(p.connTimeout))
 	if err != nil {
+		b.RecordFailure()
 		return fmt.Errorf("set deadline %s: %w", backendConn.RemoteAddr(), err)
 	}
 
@@ -77,9 +79,12 @@ func (p *Proxy) Handle(conn net.Conn) error {
 
 	for range 2 {
 		if err = <-ch; err != nil {
+			b.RecordFailure()
 			return err
 		}
 	}
+
+	b.RecordSuccess()
 
 	return nil
 }
