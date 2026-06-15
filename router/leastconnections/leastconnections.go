@@ -28,7 +28,7 @@ func (ls *LeastConnections) GetBackend() (*backend.Backend, error) {
 	var best *backend.Backend
 	bestConns := int64(math.MaxInt64)
 	for _, b := range bp {
-		if !b.IsHealthy() {
+		if !b.IsHealthy() || b.IsOpen() {
 			continue
 		}
 		if activeConns := b.GetActiveConns(); activeConns < bestConns {
