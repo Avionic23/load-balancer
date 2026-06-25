@@ -2,6 +2,12 @@ package listener
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"math/big"
 	"net"
 	"sync"
 	"testing"
@@ -122,6 +128,68 @@ func TestGracefulShutdownWaitsForConnections(t *testing.T) {
 	case <-done:
 	case <-time.After(time.Second):
 		t.Error("GracefulShutdown did not return after connection finished")
+	}
+}
+
+func generateTLSConfigs(t *testing.T) (serverCfg *tls.Config, clientCfg *tls.Config) {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		NotBefore:    time.Now(),
+		NotAfter:     time.Now().Add(time.Hour),
+		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1")},
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cert := tls.Certificate{Certificate: [][]byte{certDER}, PrivateKey: key}
+	return &tls.Config{Certificates: []tls.Certificate{cert}},
+		&tls.Config{InsecureSkipVerify: true}
+}
+
+func TestTLSListenerHandshake(t *testing.T) {
+	serverCfg, clientCfg := generateTLSConfigs(t)
+	proxy := newStubProxy()
+	close(proxy.block)
+	l := NewTLSListener(proxy, serverCfg)
+	addr := startListener(t, l)
+	defer l.GracefulShutdown(context.Background())
+
+	conn, err := tls.Dial("tcp", addr, clientCfg)
+	if err != nil {
+		t.Fatalf("tls dial failed: %v", err)
+	}
+	defer conn.Close()
+
+	select {
+	case <-proxy.called:
+	case <-time.After(time.Second):
+		t.Error("proxy Handle was not called after TLS handshake")
+	}
+}
+
+func TestTLSListenerRejectsPlainConn(t *testing.T) {
+	serverCfg, _ := generateTLSConfigs(t)
+	proxy := newStubProxy()
+	l := NewTLSListener(proxy, serverCfg)
+	addr := startListener(t, l)
+	defer l.GracefulShutdown(context.Background())
+
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	select {
+	case <-proxy.called:
+		t.Error("expected Handle not to be called on failed handshake")
+	case <-time.After(200 * time.Millisecond):
 	}
 }
 

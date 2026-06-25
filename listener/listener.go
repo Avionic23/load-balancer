@@ -2,6 +2,7 @@ package listener
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"log"
 	"net"
@@ -19,6 +20,7 @@ type Listener struct {
 	activeConns map[net.Conn]struct{}
 	mu          sync.Mutex
 	wg          sync.WaitGroup
+	tlsConfig   *tls.Config
 }
 
 func NewListener(px ProxyIO) *Listener {
@@ -28,6 +30,20 @@ func NewListener(px ProxyIO) *Listener {
 	return &Listener{
 		proxy:       px,
 		activeConns: make(map[net.Conn]struct{}),
+	}
+}
+
+func NewTLSListener(px ProxyIO, cfg *tls.Config) *Listener {
+	if px == nil {
+		panic("proxy cannot be nil")
+	}
+	if cfg == nil {
+		panic("tls config cannot be nil")
+	}
+	return &Listener{
+		proxy:       px,
+		activeConns: make(map[net.Conn]struct{}),
+		tlsConfig:   cfg,
 	}
 }
 
@@ -62,12 +78,22 @@ func (l *Listener) Listen(ln net.Listener) {
 				delete(l.activeConns, conn)
 				l.mu.Unlock()
 			}()
-			err := l.proxy.Handle(conn)
-			if err != nil {
+			if err := l.handleConn(conn); err != nil {
 				log.Printf("connection %s: %v", conn.RemoteAddr(), err)
 			}
 		}()
 	}
+}
+
+func (l *Listener) handleConn(conn net.Conn) error {
+	if l.tlsConfig != nil {
+		server := tls.Server(conn, l.tlsConfig)
+		if err := server.Handshake(); err != nil {
+			return err
+		}
+		conn = server
+	}
+	return l.proxy.Handle(conn)
 }
 
 func (l *Listener) GracefulShutdown(ctx context.Context) {
